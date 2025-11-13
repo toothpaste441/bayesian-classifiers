@@ -1,0 +1,62 @@
+import os
+import cv2
+
+count_0 = 450
+count_1 = 450
+
+def imval(img_path):
+    bi = []
+    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    img = cv2.resize(img, (3, 3), interpolation=cv2.INTER_AREA)
+    for i in range(3):
+        for j in range(3):
+            if img[i][j] < 247:
+                bi.append(1)
+            else:
+                bi.append(0)
+    de = 0
+    for i in range(9):
+        de += bi[i] * (2 ** i)
+    return de
+
+s0 = [0] * 512
+s1 = [0] * 512
+
+def total():
+    for img in os.listdir(os.path.join('Prob_Dataset', '0s')):
+        ip = os.path.join('Prob_Dataset', '0s', img)
+        i = imval(ip)
+        s0[i] += 1
+    for img in os.listdir(os.path.join('Prob_Dataset', '1s')):
+        ip = os.path.join('Prob_Dataset', '1s', img)
+        i = imval(ip)
+        s1[i] += 1
+
+def Testprob(img_path):
+    de = imval(img_path)
+    de_prev = max(0, de - 1)
+    de_next = min(511, de + 1)
+    countsim0 = s0[de_prev] + s0[de] + s0[de_next]
+    countsim1 = s1[de_prev] + s1[de] + s1[de_next]
+    P_of_I_given_Z = countsim0 / count_0
+    P_of_I_given_N = countsim1 / count_1
+    P_of_Z = count_0 / (count_0 + count_1)
+    P_of_N = count_1 / (count_0 + count_1)
+    P_of_Value = (countsim0 + countsim1) / (count_0 + count_1)
+    if P_of_Value == 0:
+        print("no similar images")
+        return
+    finalPZ = (P_of_I_given_Z * P_of_Z) / P_of_Value
+    finalPN = (P_of_I_given_N * P_of_N) / P_of_Value
+    if finalPN < finalPZ:
+        print("possibility of being a zero is more likely")
+    else:
+        print("possibility of being a one is more likely")
+
+def main():
+    total()
+    td = os.path.join('testfolder')
+    for img in os.listdir(td):
+        Testprob(os.path.join('testfolder', img))
+
+main()
