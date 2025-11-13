@@ -1,0 +1,101 @@
+import os
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import gaussian_kde
+
+# ---------- Original average intensity functions ----------
+def avg_intent(ip):
+    img = cv2.imread(ip)
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    R, G, B = img_rgb[:,:,0], img_rgb[:,:,1], img_rgb[:,:,2]
+    avg_R = np.mean(R)
+    avg_G = np.mean(G)
+    avg_B = np.mean(B)
+    avg_comp = np.mean([avg_R, avg_G, avg_B])
+    return avg_R, avg_G, avg_B, avg_comp
+
+def avg_intent_list(datadir):
+    avg_R_list, avg_G_list, avg_B_list, avg_comp_list = [], [], [], []
+    for fn in os.listdir(datadir):
+        if fn.endswith(('.jpg', '.png')):
+            ip = os.path.join(datadir, fn)
+            avg_R, avg_G, avg_B, avg_comp = avg_intent(ip)
+            avg_R_list.append(avg_R)
+            avg_G_list.append(avg_G)
+            avg_B_list.append(avg_B)
+            avg_comp_list.append(avg_comp)
+    return avg_R_list, avg_G_list, avg_B_list, avg_comp_list
+
+# ---------- Original PDF/CDF plotting ----------
+def plot_pdf_cdf(data, label):
+    data = np.array(data)
+    hist, be = np.histogram(data, bins=40, density=True)
+    bc = (be[:-1] + be[1:]) / 2
+
+    sortdata = np.sort(data)
+    cdf_v = np.arange(1, len(data) + 1) / len(data)
+
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.plot(bc, hist, label=f'PDF of {label}')
+    plt.title(f'PDF of {label}')
+    plt.xlabel('Intensity')
+    plt.ylabel('Density')
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(sortdata, cdf_v, label=f'CDF of {label}')
+    plt.title(f'CDF of {label}')
+    plt.xlabel('Intensity')
+    plt.ylabel('Cumulative Probability')
+    plt.legend()
+    plt.show()
+
+def plots(dataset, label):
+    avg_R_list, avg_G_list, avg_B_list, avg_comp_list = avg_intent_list(dataset)
+    plot_pdf_cdf(avg_R_list, f"red channel-{label}")
+    plot_pdf_cdf(avg_B_list, f"blue channel-{label}")
+    plot_pdf_cdf(avg_G_list, f"green channel-{label}")
+    plot_pdf_cdf(avg_comp_list, f"composite-{label}")
+    return avg_R_list, avg_G_list, avg_B_list, avg_comp_list
+
+# ---------- NEW: Bayesian classifier using PDF comparison ----------
+def classify_image(img_path, pdf_day, pdf_night):
+    """Classify as Day or Night using Bayes-style PDF comparison."""
+    avg_R, avg_G, avg_B, avg_comp = avg_intent(img_path)
+
+    # Compute probability density for composite intensity
+    p_day = pdf_day(avg_comp)[0]
+    p_night = pdf_night(avg_comp)[0]
+
+    if p_day > p_night:
+        result = "Day"
+    else:
+        result = "Night"
+
+    print(f"\nImage: {os.path.basename(img_path)}")
+    print(f"Avg Intensity: {avg_comp:.2f}")
+    print(f"P(I|Day) = {p_day:.4e},  P(I|Night) = {p_night:.4e}")
+    print(f"→ Classified as: {result}")
+
+    return result
+
+def main():
+    # Folders containing labeled data
+    daytime = "dataset/day"
+    nighttime = "dataset/night"
+    test_image = "dataset/test/sample.jpg"  # path to test image
+
+    # Plot and extract data
+    day_R, day_G, day_B, day_comp = plots(daytime, "Daylight")
+    night_R, night_G, night_B, night_comp = plots(nighttime, "Nighttime")
+
+    # Build probability density functions using training data
+    pdf_day = gaussian_kde(day_comp)
+    pdf_night = gaussian_kde(night_comp)
+
+    # Classify a test image using Bayes’ rule (Option A)
+    classify_image(test_image, pdf_day, pdf_night)
+
+main()
